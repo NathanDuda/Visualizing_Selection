@@ -1,51 +1,78 @@
-#
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
+# Load packages ----------------------------------------------------------------
 
 library(shiny)
+library(ggplot2)
+library(dplyr)
+library(RIdeogram)
 
-# Define UI for application that draws a histogram
-ui <- fluidPage(
+# Load data --------------------------------------------------------------------
 
-    # Application title
-    titlePanel("Old Faithful Geyser Data"),
+species_dnds <- read.csv("C:/Users/17735/Downloads/Visualizing_Selection/species_dnds.tsv", sep="")
+species_dnds <- species_dnds %>%
+  filter(dnds > 1 & dnds < 2)
 
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-            sliderInput("bins",
-                        "Number of bins:",
-                        min = 1,
-                        max = 50,
-                        value = 30)
-        ),
-
-        # Show a plot of the generated distribution
-        mainPanel(
-           plotOutput("distPlot")
-        )
-    )
+kar <- data.frame(
+  Chr = c('X', 2, 3, 4, 5),
+  Start = c(0, 0, 0, 0, 0),
+  End = c(248956422, 242193529, 198295559, 190214555, 181538259)
 )
 
-# Define server logic required to draw a histogram
-server <- function(input, output) {
+# Assuming you have data for genes and their locations
 
-    output$distPlot <- renderPlot({
-        # generate bins based on input$bins from ui.R
-        x    <- faithful[, 2]
-        bins <- seq(min(x), max(x), length.out = input$bins + 1)
+# Define UI --------------------------------------------------------------------
 
-        # draw the histogram with the specified number of bins
-        hist(x, breaks = bins, col = 'darkgray', border = 'white',
-             xlab = 'Waiting time to next eruption (in mins)',
-             main = 'Histogram of waiting times')
-    })
+ui <- fluidPage(
+  br(),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput(
+        inputId = "y", label = "Y-axis:",
+        choices = c("species", "dnds"),
+        selected = "species"
+      ),
+      
+      selectInput(
+        inputId = "x", label = "X-axis:",
+        choices = c("species", "dnds"),
+        selected = "dnds"
+      )
+    ),
+    
+    mainPanel(
+      plotOutput(outputId = "scatterplot", brush = "plot_brush"),
+      dataTableOutput(outputId = "table"),  # Changed outputId to "table"
+      plotOutput(outputId = "ideogram"),    # Changed to rideogramOutput
+      br()
+    )
+  )
+)
+
+# Define server ----------------------------------------------------------------
+
+server <- function(input, output, session) {
+  
+  output$scatterplot <- renderPlot({
+    ggplot(data = species_dnds, aes_string(x = input$x, y = input$y)) +
+      geom_point()
+  })
+  
+  output$table <- renderDataTable({
+    brushedPoints(species_dnds, brush = input$plot_brush) %>% select(species, dnds)
+  })
+  
+  output$ideogram <- renderPlot({
+    # Filter genes data based on selected points
+    selected_genes <- brushedPoints(species_dnds, brush = input$plot_brush)
+    filtered_genes_data <- species_dnds %>%
+      filter(id %in% selected_genes$gene_id)  # Assuming gene_id is the identifier for genes
+    
+    # Plot rideogram
+    ideogram(karyotype = kar, label = filtered_genes_data, label_type = 'marker')
+    # You may need to adjust aesthetics and other settings based on your genes_data structure
+  })
 }
 
-# Run the application 
+# Create the Shiny app object --------------------------------------------------
+
 shinyApp(ui = ui, server = server)
